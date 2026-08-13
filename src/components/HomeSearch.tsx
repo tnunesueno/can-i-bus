@@ -142,10 +142,10 @@ export function HomeSearch() {
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center px-5 py-16 sm:py-24">
       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
-        Transit-first
+        Transit-first discovery
       </p>
       <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-5xl">
-        Transit
+        Can I Bus
       </h1>
       <p className="mt-4 text-center text-lg text-stone-700">
         Where do you want to go?

@@ -1,4 +1,4 @@
-# Transit-First Maps
+# Can I Bus
 
 A web app that searches for places and ranks them by **how long they take to reach by public transit right now**, not by geographic distance.
 

@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Transit-First Maps",
+  title: "Can I Bus",
   description:
-    "Find places ranked by how long they take to reach by public transit, not by distance.",
+    "Find places ranked by how long they take to reach by bus and transit — not by distance.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
