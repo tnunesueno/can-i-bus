@@ -1,8 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import L from "leaflet";
-import { MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import {
+  MapContainer,
+  Marker,
+  Polyline,
+  TileLayer,
+  useMap,
+} from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import type { Coordinates, Place, TransitRoute } from "@/lib/types";
 
@@ -36,18 +42,37 @@ const originIcon = L.divIcon({
   iconAnchor: [7, 7],
 });
 
-function FitToResults({
+function toLatLngs(path: Coordinates[]): L.LatLngExpression[] {
+  return path.map((point) => [point.latitude, point.longitude]);
+}
+
+function FitBounds({
   origin,
   results,
+  selected,
   active,
 }: {
   origin: Coordinates;
   results: MappedResult[];
+  selected: MappedResult | undefined;
   active?: boolean;
 }) {
   const map = useMap();
 
   useEffect(() => {
+    const routePoints =
+      selected?.route.legs.flatMap((leg) => leg.path ?? []) ??
+      selected?.route.overviewPath ??
+      [];
+
+    if (routePoints.length > 1) {
+      map.fitBounds(L.latLngBounds(toLatLngs(routePoints)), {
+        padding: [48, 48],
+        maxZoom: 15,
+      });
+      return;
+    }
+
     const points: L.LatLngExpression[] = [
       [origin.latitude, origin.longitude],
       ...results.map(
@@ -60,14 +85,62 @@ function FitToResults({
       return;
     }
     map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 15 });
-  }, [map, origin, results]);
+  }, [map, origin, results, selected]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => map.invalidateSize(), 150);
     return () => window.clearTimeout(timeout);
-  }, [map, results.length, active]);
+  }, [map, results.length, active, selected?.place.id]);
 
   return null;
+}
+
+function RouteOverlay({ route }: { route: TransitRoute }) {
+  const segments = useMemo(() => {
+    const fromLegs = route.legs
+      .filter((leg) => (leg.path?.length ?? 0) > 1)
+      .map((leg, index) => ({
+        key: `${leg.mode}-${index}`,
+        mode: leg.mode,
+        positions: toLatLngs(leg.path!),
+      }));
+
+    if (fromLegs.length > 0) return fromLegs;
+
+    if ((route.overviewPath?.length ?? 0) > 1) {
+      return [
+        {
+          key: "overview",
+          mode: "BUS" as const,
+          positions: toLatLngs(route.overviewPath!),
+        },
+      ];
+    }
+
+    return [];
+  }, [route]);
+
+  return (
+    <>
+      {segments.map((segment) => {
+        const isWalk = segment.mode === "WALK";
+        return (
+          <Polyline
+            key={segment.key}
+            positions={segment.positions}
+            pathOptions={{
+              color: isWalk ? "#57534e" : "#0f766e",
+              weight: isWalk ? 4 : 5,
+              opacity: isWalk ? 0.85 : 0.95,
+              dashArray: isWalk ? "6 10" : undefined,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+          />
+        );
+      })}
+    </>
+  );
 }
 
 export default function MapCanvas({
@@ -78,6 +151,8 @@ export default function MapCanvas({
   active,
   onSelect,
 }: MapCanvasProps) {
+  const selected = results.find((result) => result.place.id === selectedId);
+
   return (
     <MapContainer
       center={[origin.latitude, origin.longitude]}
@@ -89,7 +164,13 @@ export default function MapCanvas({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <FitToResults origin={origin} results={results} active={active} />
+      <FitBounds
+        origin={origin}
+        results={results}
+        selected={selected}
+        active={active}
+      />
+      {selected ? <RouteOverlay route={selected.route} /> : null}
       <Marker
         position={[origin.latitude, origin.longitude]}
         icon={originIcon}

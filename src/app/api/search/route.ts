@@ -113,7 +113,7 @@ export async function POST(request: Request) {
         const unavailable =
           error instanceof TransitUnavailableError ||
           (error instanceof Error &&
-            /GOOGLE_MAPS_API_KEY|Places API|Directions API/i.test(
+            /GOOGLE_MAPS_API_KEY|Places API|Directions API|PERMISSION_DENIED|REQUEST_DENIED/i.test(
               error.message,
             ));
 

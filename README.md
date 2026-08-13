@@ -8,7 +8,7 @@ This app owns discovery, transit-time ranking, comparison, and route preview. Go
 
 1. Create a [Google Cloud](https://console.cloud.google.com/) project and enable billing.
 2. Enable these APIs:
-   - **Places API**
+   - **Places API (New)** — not the legacy Places API
    - **Directions API**
    - **Geocoding API**
 3. Create an API key. Restrict it to those three APIs.
@@ -34,5 +34,5 @@ Open [http://localhost:3000](http://localhost:3000). Allow location (or type an 
 ## Stack
 
 - Next.js App Router, React, TypeScript, Tailwind CSS
-- Google Places, Directions, and Geocoding (server-side only)
+- Google Places API (New), Directions, and Geocoding (server-side only)
 - Leaflet + OpenStreetMap for the map (no map API key)

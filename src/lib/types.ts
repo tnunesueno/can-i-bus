@@ -31,6 +31,8 @@ export type TransitLeg = {
   arrivalStop?: string;
   departureTime?: string;
   arrivalTime?: string;
+  /** Decoded path for this leg, when available. */
+  path?: Coordinates[];
 };
 
 export type TransitRoute = {
@@ -41,6 +43,8 @@ export type TransitRoute = {
   departureTime?: string;
   arrivalTime?: string;
   legs: TransitLeg[];
+  /** Full journey path for map overlay. */
+  overviewPath?: Coordinates[];
 };
 
 export type SearchResult = {

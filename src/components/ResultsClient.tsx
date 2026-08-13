@@ -300,7 +300,9 @@ function ResultsSearch({
           active={mobileTab === "map"}
           onSelect={(id) => {
             selectPlace(id);
-            setMobileTab("list");
+            if (typeof window !== "undefined" && window.innerWidth < 768) {
+              setMobileTab("map");
+            }
           }}
         />
       </section>

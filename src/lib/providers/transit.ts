@@ -1,4 +1,5 @@
 import { getGoogleMapsApiKey } from "../env";
+import { decodePolyline } from "../polyline";
 import type {
   Coordinates,
   TransitLeg,
@@ -21,6 +22,7 @@ type GoogleStep = {
   html_instructions?: string;
   start_location?: GoogleLatLng;
   end_location?: GoogleLatLng;
+  polyline?: { points?: string };
   transit_details?: {
     line?: GoogleTransitLine;
     departure_stop?: { name?: string };
@@ -42,7 +44,10 @@ type GoogleLeg = {
 type GoogleDirectionsResponse = {
   status: string;
   error_message?: string;
-  routes?: Array<{ legs?: GoogleLeg[] }>;
+  routes?: Array<{
+    legs?: GoogleLeg[];
+    overview_polyline?: { points?: string };
+  }>;
 };
 
 const FATAL_STATUSES = new Set([
@@ -103,7 +108,16 @@ function enrichWalkingStops(legs: TransitLeg[]): TransitLeg[] {
   });
 }
 
-function mapRoute(leg: GoogleLeg): TransitRoute | null {
+function stepPath(step: GoogleStep): Coordinates[] | undefined {
+  if (!step.polyline?.points) return undefined;
+  const path = decodePolyline(step.polyline.points);
+  return path.length > 0 ? path : undefined;
+}
+
+function mapRoute(
+  leg: GoogleLeg,
+  overviewEncoded?: string,
+): TransitRoute | null {
   if (!leg.duration?.value || !leg.steps?.length) return null;
 
   const mapped: TransitLeg[] = [];
@@ -113,11 +127,14 @@ function mapRoute(leg: GoogleLeg): TransitRoute | null {
 
   for (const step of leg.steps) {
     const durationMinutes = minutesFromSeconds(step.duration?.value);
+    const path = stepPath(step);
+
     if (step.travel_mode === "WALKING") {
       walkingMinutes += durationMinutes;
       mapped.push({
         mode: "WALK",
         durationMinutes,
+        path,
       });
       continue;
     }
@@ -138,8 +155,13 @@ function mapRoute(leg: GoogleLeg): TransitRoute | null {
       arrivalStop: details?.arrival_stop?.name,
       departureTime: toIso(details?.departure_time?.value),
       arrivalTime: toIso(details?.arrival_time?.value),
+      path,
     });
   }
+
+  const overviewPath = overviewEncoded
+    ? decodePolyline(overviewEncoded)
+    : mapped.flatMap((item) => item.path ?? []);
 
   return {
     durationMinutes: minutesFromSeconds(leg.duration.value),
@@ -149,6 +171,7 @@ function mapRoute(leg: GoogleLeg): TransitRoute | null {
     departureTime: toIso(leg.departure_time?.value),
     arrivalTime: toIso(leg.arrival_time?.value),
     legs: enrichWalkingStops(mapped),
+    overviewPath: overviewPath.length > 0 ? overviewPath : undefined,
   };
 }
 
@@ -187,10 +210,11 @@ export class GoogleTransitRouter implements TransitRouter {
       throw new Error(data.error_message || `Directions API ${data.status}`);
     }
 
-    const googleLeg = data.routes?.[0]?.legs?.[0];
+    const googleRoute = data.routes?.[0];
+    const googleLeg = googleRoute?.legs?.[0];
     if (!googleLeg) return null;
 
-    const route = mapRoute(googleLeg);
+    const route = mapRoute(googleLeg, googleRoute?.overview_polyline?.points);
     if (!route) return null;
 
     if (!route.departureTime) {

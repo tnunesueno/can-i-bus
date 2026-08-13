@@ -13,24 +13,57 @@ const GENERIC_TYPES = new Set([
   "plus_code",
 ]);
 
-type GooglePlacesResponse = {
-  status: string;
-  error_message?: string;
-  results?: Array<{
-    place_id: string;
-    name: string;
-    formatted_address?: string;
-    vicinity?: string;
-    rating?: number;
-    types?: string[];
-    opening_hours?: { open_now?: boolean };
-    geometry?: { location?: { lat: number; lng: number } };
-  }>;
+const FIELD_MASK = [
+  "places.id",
+  "places.displayName",
+  "places.formattedAddress",
+  "places.location",
+  "places.rating",
+  "places.types",
+  "places.primaryType",
+  "places.primaryTypeDisplayName",
+  "places.currentOpeningHours",
+].join(",");
+
+type PlacesNewPlace = {
+  id?: string;
+  name?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  location?: { latitude?: number; longitude?: number };
+  rating?: number;
+  types?: string[];
+  primaryType?: string;
+  primaryTypeDisplayName?: { text?: string };
+  currentOpeningHours?: { openNow?: boolean };
 };
 
-function pickCategory(types?: string[]): string | undefined {
-  const match = types?.find((type) => !GENERIC_TYPES.has(type));
+type PlacesNewResponse = {
+  places?: PlacesNewPlace[];
+  error?: {
+    code?: number;
+    message?: string;
+    status?: string;
+  };
+};
+
+function pickCategory(place: PlacesNewPlace): string | undefined {
+  if (place.primaryTypeDisplayName?.text) {
+    return place.primaryTypeDisplayName.text;
+  }
+  if (place.primaryType && !GENERIC_TYPES.has(place.primaryType)) {
+    return formatCategory(place.primaryType);
+  }
+  const match = place.types?.find((type) => !GENERIC_TYPES.has(type));
   return match ? formatCategory(match) : undefined;
+}
+
+function placeId(place: PlacesNewPlace): string | undefined {
+  if (place.id) return place.id;
+  if (place.name?.startsWith("places/")) {
+    return place.name.slice("places/".length);
+  }
+  return place.name;
 }
 
 export class GooglePlacesProvider implements PlaceProvider {
@@ -40,44 +73,58 @@ export class GooglePlacesProvider implements PlaceProvider {
     maxMinutes = 20,
   ): Promise<Place[]> {
     const key = getGoogleMapsApiKey();
-    const params = new URLSearchParams({
-      query,
-      location: `${location.latitude},${location.longitude}`,
-      radius: String(searchRadiusMeters(maxMinutes)),
-      key,
-    });
-
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/textsearch/json?${params}`,
-      { cache: "no-store" },
+      "https://places.googleapis.com/v1/places:searchText",
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": key,
+          "X-Goog-FieldMask": FIELD_MASK,
+        },
+        body: JSON.stringify({
+          textQuery: query,
+          pageSize: CANDIDATE_LIMIT,
+          locationBias: {
+            circle: {
+              center: {
+                latitude: location.latitude,
+                longitude: location.longitude,
+              },
+              radius: searchRadiusMeters(maxMinutes),
+            },
+          },
+        }),
+      },
     );
 
-    if (!response.ok) {
-      throw new Error(`Places API HTTP ${response.status}`);
+    const data = (await response.json()) as PlacesNewResponse;
+
+    if (!response.ok || data.error) {
+      throw new Error(
+        data.error?.message || `Places API HTTP ${response.status}`,
+      );
     }
 
-    const data = (await response.json()) as GooglePlacesResponse;
-
-    if (data.status === "ZERO_RESULTS") {
-      return [];
-    }
-
-    if (data.status !== "OK") {
-      throw new Error(data.error_message || `Places API ${data.status}`);
-    }
-
-    return (data.results ?? [])
-      .filter((result) => result.geometry?.location)
+    return (data.places ?? [])
+      .filter(
+        (place) =>
+          place.location?.latitude != null &&
+          place.location?.longitude != null &&
+          placeId(place) &&
+          place.displayName?.text,
+      )
       .slice(0, CANDIDATE_LIMIT)
-      .map((result) => ({
-        id: result.place_id,
-        name: result.name,
-        category: pickCategory(result.types),
-        latitude: result.geometry!.location!.lat,
-        longitude: result.geometry!.location!.lng,
-        address: result.formatted_address ?? result.vicinity,
-        rating: result.rating,
-        openNow: result.opening_hours?.open_now,
+      .map((place) => ({
+        id: placeId(place)!,
+        name: place.displayName!.text!,
+        category: pickCategory(place),
+        latitude: place.location!.latitude!,
+        longitude: place.location!.longitude!,
+        address: place.formattedAddress,
+        rating: place.rating,
+        openNow: place.currentOpeningHours?.openNow,
       }));
   }
 }
