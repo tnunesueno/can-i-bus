@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DEFAULT_MAX_MINUTES } from "@/lib/constants";
+import { isWalkOnlyRoute } from "@/lib/format";
 import type {
   Coordinates,
   Place,
@@ -16,6 +17,7 @@ import { RouteDetail } from "./RouteDetail";
 import { TimeFilter } from "./TimeFilter";
 
 type MobileTab = "list" | "map";
+type RouteModeFilter = "all" | "walkable" | "transit";
 
 type ResultsSearchProps = {
   query: string;
@@ -80,6 +82,7 @@ function ResultsSearch({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [routeId, setRouteId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<MobileTab>("list");
+  const [modeFilter, setModeFilter] = useState<RouteModeFilter>("all");
 
   useEffect(() => {
     const controller = new AbortController();
@@ -159,10 +162,29 @@ function ResultsSearch({
     );
   }, [resultsById]);
 
+  const walkableCount = useMemo(
+    () => rankedResults.filter((result) => isWalkOnlyRoute(result.route)).length,
+    [rankedResults],
+  );
+
+  const transitCount = rankedResults.length - walkableCount;
+
+  const filteredResults = useMemo(() => {
+    if (modeFilter === "walkable") {
+      return rankedResults.filter((result) => isWalkOnlyRoute(result.route));
+    }
+    if (modeFilter === "transit") {
+      return rankedResults.filter((result) => !isWalkOnlyRoute(result.route));
+    }
+    return rankedResults;
+  }, [rankedResults, modeFilter]);
+
   const pendingPlaces = useMemo(() => {
-    if (phase === "done") return [];
+    if (phase === "done" || modeFilter === "walkable" || modeFilter === "transit") {
+      return [];
+    }
     return candidates.filter((place) => !resultsById[place.id]);
-  }, [candidates, resultsById, phase]);
+  }, [candidates, resultsById, phase, modeFilter]);
 
   const selectedRoute = routeId ? resultsById[routeId] : undefined;
 
@@ -178,19 +200,32 @@ function ResultsSearch({
 
   useEffect(() => {
     if (!selectedId) return;
+    if (!filteredResults.some((result) => result.place.id === selectedId)) {
+      return;
+    }
     document
       .getElementById(`place-${selectedId}`)
       ?.scrollIntoView({ block: "nearest" });
-  }, [selectedId]);
+  }, [selectedId, filteredResults]);
 
   const statusText =
     phase === "finding"
       ? `Finding ${query.toLowerCase()}...`
       : phase === "routing"
         ? `${candidates.length} places found.\nCalculating transit times...`
-        : rankedResults.length > 0
-          ? `${rankedResults.length} places found`
-          : null;
+        : filteredResults.length > 0
+          ? modeFilter === "walkable"
+            ? `${filteredResults.length} walkable places`
+            : modeFilter === "transit"
+              ? `${filteredResults.length} places with transit`
+              : `${filteredResults.length} places found`
+          : phase === "done"
+            ? modeFilter === "walkable"
+              ? "No walkable places in this search."
+              : modeFilter === "transit"
+                ? "No transit routes in this search."
+                : null
+            : null;
 
   const listContent = selectedRoute ? (
     <RouteDetail
@@ -208,12 +243,42 @@ function ResultsSearch({
         </Link>
         <h1 className="mt-2 text-2xl font-semibold capitalize">{query}</h1>
         <p className="text-sm text-stone-600">Near {originLabel}</p>
-        <p className="text-sm text-stone-500">Sorted by fastest transit time</p>
+        <p className="text-sm text-stone-500">Sorted by fastest travel time</p>
         <div className="mt-3">
           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
             Maximum travel time
           </p>
           <TimeFilter value={maxMinutes} onChange={setMaxMinutes} />
+        </div>
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-stone-500">
+            Route type
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                { id: "all", label: `All (${rankedResults.length})` },
+                { id: "walkable", label: `Walkable (${walkableCount})` },
+                { id: "transit", label: `Transit (${transitCount})` },
+              ] as const
+            ).map((option) => {
+              const selected = modeFilter === option.id;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => setModeFilter(option.id)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                    selected
+                      ? "bg-stone-900 text-white"
+                      : "border border-line bg-card text-stone-600 hover:border-stone-400"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
         {statusText ? (
           <p className="mt-3 whitespace-pre-line text-sm text-stone-500">
@@ -227,7 +292,7 @@ function ResultsSearch({
           <p className="whitespace-pre-line text-stone-700">{error}</p>
         ) : (
           <div className="space-y-3">
-            {rankedResults.map((result) => (
+            {filteredResults.map((result) => (
               <ResultCard
                 key={result.place.id}
                 place={result.place}
@@ -295,7 +360,7 @@ function ResultsSearch({
         <MapView
           origin={origin}
           originLabel={originLabel}
-          results={rankedResults}
+          results={filteredResults}
           selectedId={selectedId}
           active={mobileTab === "map"}
           onSelect={(id) => {

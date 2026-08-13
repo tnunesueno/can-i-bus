@@ -4,6 +4,7 @@ import {
   formatClock,
   formatMiles,
   formatTransfers,
+  isWalkOnlyRoute,
   primaryTransitMode,
   transitModeEmoji,
 } from "@/lib/format";
@@ -26,6 +27,7 @@ export function ResultCard({
   onSelect,
   onViewRoute,
 }: ResultCardProps) {
+  const walkOnly = route ? isWalkOnlyRoute(route) : false;
   const transitEmoji = route
     ? transitModeEmoji(primaryTransitMode(route))
     : "🚌";
@@ -48,18 +50,37 @@ export function ResultCard({
             Calculating…
           </p>
         )}
-        <h2 className="mt-1 text-lg font-semibold text-stone-900">{place.name}</h2>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <h2 className="text-lg font-semibold text-stone-900">{place.name}</h2>
+          {walkOnly ? (
+            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
+              Walkable
+            </span>
+          ) : null}
+        </div>
         {route ? (
           <div className="mt-2 space-y-1 text-sm text-stone-600">
-            <p>
-              Leaves {formatClock(route.departureTime)} · Arrives{" "}
-              {formatClock(route.arrivalTime)}
-            </p>
-            <p>
-              🚶 {route.walkingMinutes} min walking · {transitEmoji}{" "}
-              {route.transitMinutes} min transit
-            </p>
-            <p>{formatTransfers(route.transfers)}</p>
+            {walkOnly ? (
+              <>
+                <p>
+                  Leave now · Arrive {formatClock(route.arrivalTime)}
+                </p>
+                <p>🚶 {route.walkingMinutes} min walking</p>
+                <p>No transit needed</p>
+              </>
+            ) : (
+              <>
+                <p>
+                  Leaves {formatClock(route.departureTime)} · Arrives{" "}
+                  {formatClock(route.arrivalTime)}
+                </p>
+                <p>
+                  🚶 {route.walkingMinutes} min walking · {transitEmoji}{" "}
+                  {route.transitMinutes} min transit
+                </p>
+                <p>{formatTransfers(route.transfers)}</p>
+              </>
+            )}
           </div>
         ) : null}
         <p className="mt-3 text-sm text-stone-500">

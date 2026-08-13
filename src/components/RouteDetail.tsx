@@ -2,10 +2,14 @@
 
 import {
   formatClock,
+  isWalkOnlyRoute,
   transitModeEmoji,
   transitModeLabel,
 } from "@/lib/format";
-import { appleMapsTransitUrl, googleMapsTransitUrl } from "@/lib/navigation";
+import {
+  appleMapsDirectionsUrl,
+  googleMapsDirectionsUrl,
+} from "@/lib/navigation";
 import type { Coordinates, Place, TransitRoute } from "@/lib/types";
 
 type RouteDetailProps = {
@@ -27,6 +31,8 @@ export function RouteDetail({
     latitude: place.latitude,
     longitude: place.longitude,
   };
+  const walkOnly = isWalkOnlyRoute(route);
+  const travelMode = walkOnly ? "walking" : "transit";
 
   return (
     <div className="flex h-full flex-col bg-card">
@@ -38,14 +44,31 @@ export function RouteDetail({
         >
           Back to results
         </button>
-        <h2 className="mt-3 text-2xl font-semibold">{place.name}</h2>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <h2 className="text-2xl font-semibold">{place.name}</h2>
+          {walkOnly ? (
+            <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs font-medium text-stone-700">
+              Walkable
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-3xl font-semibold text-time tabular-nums">
           {route.durationMinutes} min
         </p>
         <p className="mt-2 text-sm text-stone-600">
-          Leaves {formatClock(route.departureTime)}
-          <br />
-          Arrives {formatClock(route.arrivalTime)}
+          {walkOnly ? (
+            <>
+              Leave now
+              <br />
+              Arrive {formatClock(route.arrivalTime)}
+            </>
+          ) : (
+            <>
+              Leaves {formatClock(route.departureTime)}
+              <br />
+              Arrives {formatClock(route.arrivalTime)}
+            </>
+          )}
         </p>
       </div>
 
@@ -84,17 +107,28 @@ export function RouteDetail({
           })}
         </ol>
         <p className="mt-6 text-sm text-stone-500">
-          {route.transfers} {route.transfers === 1 ? "transfer" : "transfers"}
-          <br />
-          {route.walkingMinutes} min walking
-          <br />
-          {route.transitMinutes} min transit
+          {walkOnly ? (
+            <>
+              No transit needed
+              <br />
+              {route.walkingMinutes} min walking
+            </>
+          ) : (
+            <>
+              {route.transfers}{" "}
+              {route.transfers === 1 ? "transfer" : "transfers"}
+              <br />
+              {route.walkingMinutes} min walking
+              <br />
+              {route.transitMinutes} min transit
+            </>
+          )}
         </p>
       </div>
 
       <div className="space-y-2 border-t border-line p-4">
         <a
-          href={googleMapsTransitUrl(origin, destination)}
+          href={googleMapsDirectionsUrl(origin, destination, travelMode)}
           target="_blank"
           rel="noreferrer"
           className="block rounded-xl bg-stone-900 px-4 py-3 text-center text-sm font-medium text-white hover:bg-stone-800"
@@ -102,7 +136,7 @@ export function RouteDetail({
           Navigate with Google Maps
         </a>
         <a
-          href={appleMapsTransitUrl(origin, destination)}
+          href={appleMapsDirectionsUrl(origin, destination, travelMode)}
           target="_blank"
           rel="noreferrer"
           className="block rounded-xl border border-line px-4 py-3 text-center text-sm font-medium text-stone-800 hover:bg-stone-50"

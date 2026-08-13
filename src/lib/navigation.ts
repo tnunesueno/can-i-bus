@@ -1,26 +1,28 @@
 import type { Coordinates } from "./types";
 
-export function googleMapsTransitUrl(
+export function googleMapsDirectionsUrl(
   origin: Coordinates,
   destination: Coordinates,
+  travelMode: "transit" | "walking" = "transit",
 ): string {
   const params = new URLSearchParams({
     api: "1",
     origin: `${origin.latitude},${origin.longitude}`,
     destination: `${destination.latitude},${destination.longitude}`,
-    travelmode: "transit",
+    travelmode: travelMode,
   });
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-export function appleMapsTransitUrl(
+export function appleMapsDirectionsUrl(
   origin: Coordinates,
   destination: Coordinates,
+  travelMode: "transit" | "walking" = "transit",
 ): string {
   const params = new URLSearchParams({
     saddr: `${origin.latitude},${origin.longitude}`,
     daddr: `${destination.latitude},${destination.longitude}`,
-    dirflg: "r",
+    dirflg: travelMode === "walking" ? "w" : "r",
   });
   return `https://maps.apple.com/?${params.toString()}`;
 }

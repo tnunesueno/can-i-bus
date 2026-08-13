@@ -65,6 +65,13 @@ export function primaryTransitMode(route: TransitRoute): TransitMode {
   return route.legs.find((leg) => leg.mode !== "WALK")?.mode ?? "WALK";
 }
 
+/** True when the fastest leave-now route is walking only (no transit). */
+export function isWalkOnlyRoute(route: TransitRoute): boolean {
+  if (route.transitMinutes > 0) return false;
+  if (route.legs.length === 0) return route.walkingMinutes > 0;
+  return route.legs.every((leg) => leg.mode === "WALK");
+}
+
 export function stripHtml(value: string): string {
   return value.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim();
 }
